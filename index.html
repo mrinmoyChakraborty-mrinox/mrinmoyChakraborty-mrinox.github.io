@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>ApnaMistri Test Map</title>
+  <meta charset="utf-8" />
+  <title>Leaflet Geocoding Test</title>
 
   <!-- Leaflet CSS -->
   <link
@@ -17,13 +17,36 @@
     }
 
     #map {
-      height: 100vh;
+      height: 90vh;
       width: 100%;
+    }
+
+    #searchBox {
+      padding: 10px;
+      background: #f5f5f5;
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      flex: 1;
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
     }
   </style>
 </head>
 
 <body>
+
+<div id="searchBox">
+  <input type="text" id="addressInput" placeholder="Enter address (e.g. Salt Lake Kolkata)" />
+  <button onclick="geocodeAddress()">Search</button>
+</div>
 
 <div id="map"></div>
 
@@ -32,92 +55,91 @@
 
 <script>
 
-  // =========================
-  // Fake Workers (for testing)
-  // =========================
+let map;
+let marker;
 
-  const workers = [
-    {
-      name: "Rahul - Plumber",
-      lat: 22.5726,
-      lng: 88.3639,
-      slug: "rahul-plumber"
-    },
-    {
-      name: "Suresh - Electrician",
-      lat: 22.5800,
-      lng: 88.3700,
-      slug: "suresh-electrician"
-    },
-    {
-      name: "Akash - Tile Worker",
-      lat: 22.5650,
-      lng: 88.3550,
-      slug: "akash-tiles"
-    }
-  ];
+// ==========================
+// Initialize Map
+// ==========================
 
-  // =========================
-  // Get User Location
-  // =========================
+navigator.geolocation.getCurrentPosition(initMap, () => {
+  // fallback if location denied
+  initMap({
+    coords: { latitude: 22.5726, longitude: 88.3639 }
+  });
+});
 
-  navigator.geolocation.getCurrentPosition(initMap, showError);
+function initMap(position) {
 
-  function showError() {
-    alert("Location permission required!");
-  }
+  const lat = position.coords.latitude;
+  const lng = position.coords.longitude;
 
-  function initMap(position) {
+  map = L.map('map').setView([lat, lng], 13);
 
-    const userLat = position.coords.latitude;
-    const userLng = position.coords.longitude;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-    // =========================
-    // Create Map
-    // =========================
+  marker = L.marker([lat, lng]).addTo(map)
+    .bindPopup("You are here")
+    .openPopup();
 
-    const map = L.map('map').setView([userLat, userLng], 13);
+  // Double click event for reverse geocoding
+  map.on("dblclick", function(e) {
+    reverseGeocode(e.latlng.lat, e.latlng.lng);
+  });
 
-    // OpenStreetMap tiles (FREE)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+}
 
-    // =========================
-    // User Marker
-    // =========================
+// ==========================
+// Geocode (Address → LatLng)
+// ==========================
 
-    L.marker([userLat, userLng])
-      .addTo(map)
-      .bindPopup("You are here")
-      .openPopup();
+function geocodeAddress() {
 
-    // =========================
-    // Worker Markers
-    // =========================
+  const address = document.getElementById("addressInput").value;
 
-    workers.forEach(w => {
+  if (!address) return alert("Enter address first!");
 
-      const marker = L.marker([w.lat, w.lng]).addTo(map);
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+    .then(res => res.json())
+    .then(data => {
 
-      marker.bindPopup(`
-        <b>${w.name}</b><br>
-        <button onclick="openProfile('${w.slug}')">View Profile</button>
-      `);
+      if (data.length === 0) {
+        alert("Address not found!");
+        return;
+      }
 
-    });
+      const lat = data[0].lat;
+      const lng = data[0].lon;
 
-  }
+      map.setView([lat, lng], 14);
 
-  // =========================
-  // Profile Redirect
-  // =========================
+      marker.setLatLng([lat, lng])
+        .bindPopup(data[0].display_name)
+        .openPopup();
 
-  function openProfile(slug) {
-    alert("Open profile: " + slug);
-    // later:
-    // window.location.href = "/profile/" + slug;
-  }
+    })
+    .catch(err => console.log(err));
+}
+
+// ==========================
+// Reverse Geocode (LatLng → Address)
+// ==========================
+
+function reverseGeocode(lat, lng) {
+
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
+    .then(res => res.json())
+    .then(data => {
+
+      marker.setLatLng([lat, lng])
+        .bindPopup(data.display_name)
+        .openPopup();
+
+    })
+    .catch(err => console.log(err));
+}
 
 </script>
 
